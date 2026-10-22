@@ -52,10 +52,27 @@ CREATE TABLE IF NOT EXISTS public.barangay_announcements (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 4. Emergency Alerts Table (SOS System)
+CREATE TABLE IF NOT EXISTS public.emergency_alerts (
+    id TEXT PRIMARY KEY DEFAULT ('sos-' || floor(extract(epoch from now()) * 1000)::text),
+    tracking_code VARCHAR(100) NOT NULL,
+    resident_id VARCHAR(100),
+    resident_name VARCHAR(255) NOT NULL,
+    contact_number VARCHAR(50) NOT NULL,
+    purok_zone VARCHAR(100) NOT NULL,
+    emergency_type VARCHAR(100) NOT NULL, -- 'Medical', 'Fire', 'Tanod / Police', 'Flood / Rescue'
+    details TEXT,
+    status VARCHAR(50) DEFAULT 'active', -- 'active', 'dispatched', 'resolved'
+    dispatched_at TIMESTAMPTZ,
+    resolved_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Enable RLS and public access for demo
 ALTER TABLE public.document_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.barangay_blotters ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.barangay_announcements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.emergency_alerts ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Allow public read document_requests" ON public.document_requests FOR SELECT USING (true);
 CREATE POLICY "Allow public insert document_requests" ON public.document_requests FOR INSERT WITH CHECK (true);
@@ -66,9 +83,14 @@ CREATE POLICY "Allow public insert barangay_blotters" ON public.barangay_blotter
 
 CREATE POLICY "Allow public read barangay_announcements" ON public.barangay_announcements FOR SELECT USING (true);
 
+CREATE POLICY "Allow public read emergency_alerts" ON public.emergency_alerts FOR SELECT USING (true);
+CREATE POLICY "Allow public insert emergency_alerts" ON public.emergency_alerts FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update emergency_alerts" ON public.emergency_alerts FOR UPDATE USING (true);
+
 -- Enable Realtime
 ALTER PUBLICATION supabase_realtime ADD TABLE public.document_requests;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.barangay_blotters;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.barangay_announcements;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.emergency_alerts;
 
 NOTIFY pgrst, 'reload schema';

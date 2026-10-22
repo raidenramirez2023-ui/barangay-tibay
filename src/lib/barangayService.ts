@@ -615,6 +615,19 @@ const DEFAULT_EMERGENCIES: EmergencyAlert[] = [
 ];
 
 export async function getEmergencyAlerts(): Promise<EmergencyAlert[]> {
+  try {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("emergency_alerts")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (!error && data && data.length > 0) {
+      return data as EmergencyAlert[];
+    }
+  } catch {
+    // fallback to local
+  }
   return getLocal<EmergencyAlert[]>(STORAGE_KEY_EMERGENCIES, DEFAULT_EMERGENCIES);
 }
 
@@ -633,7 +646,7 @@ export async function createEmergencyAlert(
   const trackingCode = `SOS-2026-${codePrefix}-${randomDigits}`;
   const now = new Date().toISOString();
 
-  const newAlert: EmergencyAlert = {
+  let newAlert: EmergencyAlert = {
     ...payload,
     id: `sos-${Date.now()}`,
     tracking_code: trackingCode,
@@ -641,8 +654,34 @@ export async function createEmergencyAlert(
     created_at: now,
   };
 
+  try {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("emergency_alerts")
+      .insert({
+        tracking_code: trackingCode,
+        resident_id: payload.resident_id,
+        resident_name: payload.resident_name,
+        contact_number: payload.contact_number,
+        purok_zone: payload.purok_zone,
+        emergency_type: payload.emergency_type,
+        details: payload.details,
+        status: "active",
+        created_at: now,
+      })
+      .select()
+      .single();
+
+    if (!error && data) {
+      newAlert = data as EmergencyAlert;
+    }
+  } catch {
+    // ignore
+  }
+
   const current = getLocal<EmergencyAlert[]>(STORAGE_KEY_EMERGENCIES, DEFAULT_EMERGENCIES);
-  setLocal(STORAGE_KEY_EMERGENCIES, [newAlert, ...current]);
+  setLocal(STORAGE_KEY_EMERGENCIES, [newAlert, ...current.filter((c) => c.id !== newAlert.id)]);
+  notifyDataUpdated();
   return { success: true, data: newAlert };
 }
 
@@ -650,9 +689,23 @@ export async function updateEmergencyAlertStatus(
   id: string,
   newStatus: "dispatched" | "resolved"
 ): Promise<{ success: boolean; data?: EmergencyAlert }> {
-  const all = getLocal<EmergencyAlert[]>(STORAGE_KEY_EMERGENCIES, DEFAULT_EMERGENCIES);
   const now = new Date().toISOString();
 
+  try {
+    const supabase = createClient();
+    await supabase
+      .from("emergency_alerts")
+      .update({
+        status: newStatus,
+        dispatched_at: newStatus === "dispatched" ? now : undefined,
+        resolved_at: newStatus === "resolved" ? now : undefined,
+      })
+      .eq("id", id);
+  } catch {
+    // ignore
+  }
+
+  const all = getLocal<EmergencyAlert[]>(STORAGE_KEY_EMERGENCIES, DEFAULT_EMERGENCIES);
   let target: EmergencyAlert | undefined;
   const updated = all.map((item) => {
     if (item.id === id) {
@@ -668,6 +721,7 @@ export async function updateEmergencyAlertStatus(
   });
 
   setLocal(STORAGE_KEY_EMERGENCIES, updated);
+  notifyDataUpdated();
   return { success: true, data: target };
 }
 

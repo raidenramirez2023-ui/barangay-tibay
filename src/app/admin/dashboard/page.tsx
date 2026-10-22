@@ -313,6 +313,22 @@ export default function BarangayAdminDashboardPage() {
     }
     loadData();
 
+    // 1. Cross-device real-time sync poll (Phone -> Admin PC)
+    const pollTimer = setInterval(async () => {
+      try {
+        const [latestEmgs, latestReqs] = await Promise.all([
+          getEmergencyAlerts(),
+          getDocumentRequests(),
+        ]);
+        if (isMounted) {
+          setEmergencies(latestEmgs);
+          setRequests(latestReqs);
+        }
+      } catch {
+        // ignore
+      }
+    }, 3500);
+
     const handleSync = () => {
       loadData();
     };
@@ -322,6 +338,7 @@ export default function BarangayAdminDashboardPage() {
 
     return () => {
       isMounted = false;
+      clearInterval(pollTimer);
       window.removeEventListener("brgy_tibay_data_updated", handleSync);
       window.removeEventListener("storage", handleSync);
     };
